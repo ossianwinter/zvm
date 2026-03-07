@@ -1,0 +1,51 @@
+name: Check
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+env:
+  RUST_BACKTRACE: true
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+jobs:
+  rustfmt:
+    name: Check / Rustfmt
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: stable, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: rustfmt
+      - run: cargo fmt --check
+  clippy:
+    name: Check / Clippy
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: stable, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: clippy
+      - run: cargo clippy --all-targets --all-features --target ${{ matrix.target }} --locked

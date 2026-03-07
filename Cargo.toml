@@ -1,0 +1,14 @@
+[package]
+name = "zvm"
+version = "0.1.0"
+authors = ["Ossian Winter <ossian@winter.vg>"]
+edition = "2024"
+rust-version = "1.93.1"
+description = "The Z virtual machine"
+readme = "README.org"
+homepage = "https://zvm.winter.vg"
+repository = "https://github.com/ossianwinter/zvm"
+license = "MIT"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage, coverage_nightly)'] }

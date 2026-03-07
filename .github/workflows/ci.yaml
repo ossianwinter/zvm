@@ -1,0 +1,172 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+env:
+  RUST_BACKTRACE: true
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+jobs:
+  test:
+    name: CI / Test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: stable, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+      - run: cargo test --no-fail-fast --tests --all-features --target ${{ matrix.target }} --locked
+  coverage:
+    name: CI / Coverage
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: nightly, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@205eb1d74c6feda89abb1f3a09360601953286c0 # tag=v2.68.18
+        with:
+          tool: cargo-llvm-cov
+      - run: cargo llvm-cov --lcov --output-path llvm.lcov test --no-fail-fast --tests --all-features --target ${{ matrix.target }} --locked
+      - uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # tag=v5.5.2
+        env:
+          RUSTC_TOOLCHAIN: ${{ matrix.toolchain }}
+          RUSTC_TARGET: ${{ matrix.target }}
+        with:
+          env_vars: RUSTC_TOOLCHAIN,RUSTC_TARGET
+          fail_ci_if_error: true
+  bench:
+    name: CI / Bench
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: stable, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/install-action@205eb1d74c6feda89abb1f3a09360601953286c0 # tag=v2.68.18
+        with:
+          tool: gungraun-runner
+      - run: cargo bench --no-fail-fast --benches --all-features --target ${{ matrix.target }} --locked
+        env:
+          GUNGRAUN_TOOLS: dhat
+  miri:
+    name: CI / Miri
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: nightly, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: miri
+      - run: cargo miri setup
+      - run: cargo miri test --no-fail-fast --tests --all-features --target ${{ matrix.target }} --locked
+        env:
+          PROPTEST_DISABLE_FAILURE_PERSISTENCE: true
+          MIRIFLAGS: -Zmiri-env-forward=PROPTEST_DISABLE_FAILURE_PERSISTENCE
+  asan:
+    name: CI / ASan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: nightly, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: rust-src
+      - run: cargo test --no-fail-fast -Zbuild-std --tests --all-features --target ${{ matrix.target }} --locked
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+  lsan:
+    name: CI / LSan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: nightly, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: rust-src
+      - run: cargo test --no-fail-fast -Zbuild-std --tests --all-features --target ${{ matrix.target }} --locked
+        env:
+          RUSTFLAGS: -Zsanitizer=leak
+  msan:
+    name: CI / MSan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: nightly, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: rust-src
+      - run: cargo test --no-fail-fast -Zbuild-std --tests --all-features --target ${{ matrix.target }} --locked
+        env:
+          RUSTFLAGS: -Zsanitizer=memory
+  tsan:
+    name: CI / TSan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { toolchain: nightly, target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd       # tag=v6.0.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+          components: rust-src
+      - run: cargo test --no-fail-fast -Zbuild-std --tests --all-features --target ${{ matrix.target }} --locked
+        env:
+          RUSTFLAGS: -Zsanitizer=thread
